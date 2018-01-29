@@ -1,5 +1,5 @@
 # STM8-Multi-Tasker
-## Preemptive/Cooperative with Round Robin Scheduler
+## Preemptive/Cooperative Round Robin Scheduler for STM8
 
 Stability: **Work in Progress**
 
