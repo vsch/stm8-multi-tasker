@@ -2,8 +2,8 @@
 // Created by Vladimir Schneider on 2018-01-28.
 //
 
-#ifndef SDCC_TEST_SEMAPHORES_H
-#define SDCC_TEST_SEMAPHORES_H
+#ifndef MULTI_TASKER_SEMAPHORES_H
+#define MULTI_TASKER_SEMAPHORES_H
 
 #include "tasks.h"
 
@@ -20,4 +20,4 @@ extern void InitSema(Sema *sema, uint8_t initialCount);
 extern void AcquireSema(Sema *sema);
 extern void ReleaseSema(Sema *sema);
 
-#endif //SDCC_TEST_SEMAPHORES_H
+#endif //MULTI_TASKER_SEMAPHORES_H

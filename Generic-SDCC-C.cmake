@@ -29,7 +29,10 @@ find_program(SDCCLIB_EXECUTABLE sdcclib)
 set(CMAKE_AR "${SDCCLIB_EXECUTABLE}" CACHE FILEPATH "The sdcc librarian" FORCE)
 
 # CMAKE_C_FLAGS_INIT and CMAKE_EXE_LINKER_FLAGS_INIT should be set in a CMAKE_SYSTEM_PROCESSOR file
-set(CMAKE_C_FLAGS_INIT " -mstm8")
+set(CMAKE_C_FLAGS_INIT " -mstm8 --opt-code-size ")
+#set(CMAKE_C_FLAGS_INIT " -mstm8 ")
+#set(CMAKE_C_FLAGS_INIT " -mstm8 --opt-code-speed ")
+
 set (CMAKE_EXE_LINKER_FLAGS_INIT "")
 
 # compile a C file into an object file

@@ -4,48 +4,62 @@
 
 #include "semaphores.h"
 
-void InitSema(Sema *sema, uint8_t initialCount) {
-    InitQNode((QNode *) sema);
-    sema->count = initialCount;
-}
-
-void AcquireSema(Sema *sema) __naked {
+void InitSema(Sema *sema, uint8_t initialCount)__naked
+{
     (void)sema;
+    (void)initialCount;
+//    sema->count = initialCount;
+//    InitQNode((QNode *) sema);
 // @formatter:off
 __asm
+    ld      a,(3,sp) ; initialCount
+    ldw     x,(4,sp) ; sema
+    ld      (SEMA_COUNT,x),a
+    jp      __InitQNodeInX
+__endasm;
+// @formatter:on
+}
+
+void AcquireSema(Sema *sema)__naked {
+    (void) sema;
+// @formatter:off
+__asm
+    push cc
+    rim
+    ldw     x,(4,sp)  ; get sema
+
+    ld      a,(SEMA_COUNT,x)
+    jrne    acquire.done
+
+    pop     cc
+    popw    y ; get return address
+    callf   acquire.far
+acquire.far:
+    ; here the stack looks like the following was done: push pcl, push pch, push pce
+    ldw    (1,sp),y ; overwrite return with callers address
+
+    ; simulate an interrupt stack
     pushw y
     pushw x
     push a
     push cc
     rim
-    ldw     y,(9,sp)  ; get sema
 
-    ld      a,(SEMA_COUNT,y)
-    jrne    acquire.done
-
-    ; release this one
-    ldw     x,_currentTask
-    pushw   y
-    pushw   x
-    call    _QNodeLinkTail
-    addw    sp,#4  ; drop params
-
-    clr    _currentTask
-    clr    _currentTask+1
-
-    jp      __IsrYield
+    ; put this one in the queue
+    jp      __IsrYieldToXTail
 
 acquire.done:
     dec     a
-    ld      (SEMA_COUNT,y),a
-    iret
+    ld      (SEMA_COUNT,x),a
+    pop     cc
+    ret
 
 __endasm;
 // @formatter:on
 }
 
-void ReleaseSema(Sema *sema) __naked {
-    (void)sema;
+void ReleaseSema(Sema *sema)__naked {
+    (void) sema;
 // @formatter:off
 __asm
     push cc
@@ -62,6 +76,7 @@ __asm
     pushw   x
     pushw   y
     call    _QNodeLinkTail
+    addw    sp,#4
     jra     release.done
 
 release.decr:

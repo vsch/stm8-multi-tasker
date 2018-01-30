@@ -1,5 +1,9 @@
 #include "stdint.h"
-#include "queues.h"
+#include "tasks.h"
+#include "timers.h"
+#include "semaphores.h"
+#include "events.h"
+#include "mutexes.h"
 
 #define CLK_DIVR	(*(volatile uint8_t *)0x50c6)
 #define CLK_PCKENR1	(*(volatile uint8_t *)0x50c7)
@@ -25,8 +29,67 @@ unsigned int clock(void)
 
 QNode timer;
 
+#ifdef OPT_PRESERVE_GLOBAL_STATE
+
+uint8_t globalVar1;
+uint16_t globalVar2;
+
+uint16_t _globalStateReturn;
+/*
+ * SaveGlobalState/RestoreGlobalState examples
+ *
+ * this is the simplest form which is easy to create and hard to maintain,
+ * any way to get state to from SP is fine
+ *
+ * If you have a block of memory to be saved it will be more efficient to copy the
+ * whole block to the stack instead pushing/popping one byte/word at a time
+ */
+void SaveGlobalState() __naked {
+// @formatter:off
+__asm
+    popw    x
+    ldw     __globalStateReturn,x
+
+    ; now just push global vars to stack
+    ld      a,_globalVar1
+    push    a
+    ldw     x,_globalVar2
+    pushw   x
+
+    jp     [__globalStateReturn] ; do a return
+__endasm;
+// @formatter:on
+}
+
+void RestoreGlobalState() __naked {
+// @formatter:off
+__asm
+    popw    x
+    ldw     __globalStateReturn,x
+
+    ; now just pop global vars from stack
+    pop     a
+    ld      _globalVar1,a
+    popw    x
+    ldw     _globalVar2,x
+
+    jp     [__globalStateReturn] ; do a return
+__endasm;
+// @formatter:on
+}
+
+#endif
+
+Mutex mutex;
+
 void main(void)
 {
+    mutex.owner = 0;
+    mutex.prev = (Task *)&mutex;
+    mutex.next = (Task *)&mutex;
+
+    InitMutex(&mutex);
+
     InitQNode(&timer);
 
     if (QNodeTest(&timer))

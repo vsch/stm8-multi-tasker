@@ -3,11 +3,10 @@
 //
 #include "tasks.h"
 
-#ifndef SDCC_TEST_TIMERS_H
-#define SDCC_TEST_TIMERS_H
+#ifndef MULTI_TASKER_TIMERS_H
+#define MULTI_TASKER_TIMERS_H
 
-typedef struct Timer
-{
+typedef struct Timer {
     Task *prev;
     Task *next;
     uint16_t ticks;
@@ -17,19 +16,20 @@ typedef struct Timer
 #define TIMER_TICK 4
 
 extern uint16_t TickTime();
-extern void InitTimers();
+extern void InitTimersF();
 extern void WaitTicks(uint16_t ticks);
-extern void WaitTicksAdj(uint16_t ticks);
-extern void _TickTimerIsr() __interrupt;
 
-#ifdef USE_MILLI_TIMERS
+#ifdef OPT_ADJUSTABLE_TICKS
+extern void WaitTicksAdj(uint16_t ticks);
+#endif
+
+#ifdef OPT_MILLI_TIMER
 extern void WaitMillis(uint16_t millis);
-#ifdef USE_MILLI_TIMERS
+#ifdef OPT_MILLI_TIMER
 extern void WaitSecs(uint16_t secs);
 #endif
 #endif
 
-// for asm code, offsets to structure's fields
-#define TASK_SP 6
+extern void _TickTimerIsr()__interrupt;
 
-#endif //SDCC_TEST_TIMERS_H
+#endif //MULTI_TASKER_TIMERS_H

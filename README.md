@@ -1,41 +1,72 @@
 # STM8-Multi-Tasker
+
 ## Preemptive/Cooperative Round Robin Scheduler for STM8
 
-Stability: **Work in Progress**
+Stability: **Not Ready** **Work in Progress**
 
-Status: **Not Ready**
+Status: **Broken** **Do Not Use Yet**
 
 Version: **0.0**
 
 A tiny multi-tasker to allow threads with Stack context switching to be used on the STM8 micro
-processor. With All features enabled will take 30 bytes of data and 1k of code.
+processor.
+
+Minimal functionality for cooperative multi tasking, no global state preservation: less than 256
+bytes of code and 8 bytes of data, with additional per task data needed: 6 + task's stack size.
+
+Minimal timer functionality of WaitTicks(uint16 ticks) for task suspension until number of clock
+ticks, will add: 261 bytes of code and 8 bytes of data. It will also increase per task use to 8
+\+ task's stack size.
+
+With All features enabled will bite off 34 bytes of data and a bit under 1k of code + per task
+use to 8 + task's stack size.
 
 Implemented with [SDCC](http://sdcc.sourceforge.net) in mixed C and assembler. Using JetBrains
 CLion environment. (TODO: Add Instructions on how to set it up to work reasonably well).
 
-**NOTE**: You will need to wrap any calls to non re-entrant libraries with a resource lock so
-that no other task will be able to enter the library if there is a task switch. Create a
-semaphore by declaring `Semaphore sema;`. Initialize it in the initialization routine via
-`InitSema(&sema)`. Before entering a library that need guarding `AcquireSema(&sema);` upon
-return `ReleaseSema(&sema)`.
+Most of the core is written in assembler to reduce size. The SDCC compiler is not very efficient
+and I prefer to take time to optimize reusable code. C can then be used for specific projects
+with less concern for space.
+
+#### NOTE
+
+Any non re-entrant functions that are called with interrupts enabled will need to be protected
+from having one task's call interrupted and then another task making the call from another
+context. There are two ways of handling this:
+
+* Guard these functions with a Mutex to prevent another task from entering until the last task
+  leaves. Declare a mutex variable, initialize it. Then for a set of functions if you want then
+  do a call first do `LockMutex(&mutex)` then call the function and then `UnlockMutex(&mutex)`
+
+* if the location where the function/library stores its temp variables or global state is known
+  and the extra stack space available, then you can use the global state preserving option
+  `OPT_PRESERVE_GLOBAL_STATE`, write two functions to save state and restore state. These will
+  be called whenever there is a task switch. Use sparingly because the extra space on the stack
+  will need to be allocated for every task.
 
 Assembly routines are for default compilation with caller saving registers it wants preserved.
 
 This library disables interrupts while manipulating structures. This will increased interrupt
-latency but does make it thread safe.
-
+latency.
 
 | Module     | Functionality Provided                 | Data (bytes) | Code (bytes) | Per Instance Overhead (bytes)  |
 |:-----------|:---------------------------------------|-------------:|-------------:|:-------------------------------|
-| Queues     | Circular linked lists                  |            0 |          168 | per QNode or Queue: 4          |
-| Tasks      | Cooperative multi-tasking              |            4 |           89 | per Task: 9  + task stack size |
-|            | Preemptive (needs tick timer)          |            6 |          141 |                                |
-| Timers     | Timed wait, tick, millisec and seconds |           24 |          505 |                                |
-|            | Timed wait, tick and millisec only     |           16 |          447 |                                |
-|            | Timed wait, tick only                  |            8 |          389 |                                |
-| Semaphores | Resource lock Acquire/Release          |            0 |           87 | per Semaphore: 5               |
-| Signals    | Multi task event synchronization       |            0 |           61 | per Signal: 4                  |
-| **All**    | All options loaded                     |       **30** |      **980** |                                |
+| Queues     | Circular linked lists                  |            0 |          121 | per QNode or Queue: 4          |
+| Tasks      | Cooperative/Preemptive multi-tasking   |            8 |          186 | per Task: 6  + task stack size |
+| Timers     | Timed wait, tick, millisec and seconds |           26 |          438 | per Task: 2                    |
+| Semaphores | Resource lock Acquire/Release          |            0 |           74 | per Semaphore: 5               |
+| Events     | Multi task event synchronization       |            0 |           49 | per Event: 4                   |
+| Mutexes    | Multi task event synchronization       |            0 |          107 | per Mutex: 7                   |
+| **All**    | All options loaded                     |       **34** |      **970** |                                |
+
+## Usage Examples
+
+* [ ] Cooperative
+* [ ] Simple Timer
+* [ ] Periodic Timer, adjusted
+* [ ] Mutex around lib calls
+* [ ] Preserve Global State
+* [ ] Events and interrupts
 
 ## Features
 
@@ -57,7 +88,7 @@ latency but does make it thread safe.
   capability when a task exceeds maximum time slice, configured in timer ticks.
 
   Each process has 9 bytes of overhead + its stack area size. Since each process is a QNode it
-  can be waiting for at most one Timer, Signal or Semaphone, while waiting it is linked into the
+  can be waiting for at most one Timer, Event or Semaphone, while waiting it is linked into the
   corresponding queue.
 
   * `void InitTasks()` - initialize scheduler data structures. Do this on reset before enabling
@@ -78,13 +109,13 @@ latency but does make it thread safe.
   * `void ReleaseSema(Seam *sema)` - return a single count of the resource. A task waiting for
     the resource will be scheduled to resume.
 
-* Signals implement multiple tasks waiting on event, with all tasks resumed when the signal is
+* Events implement multiple tasks waiting on event, with all tasks resumed when the event is
   raised.
 
-  * `void InitSignal(Signal= *signal)` - initialize signal
-  * `void WaitSignal(Signal= *signal)` - suspend until the next raise signal is called by
-    another task
-  * `void RaiseSignal(Signal= *signal)` - raise signal and schedule all waiting tasks.
+  * `void InitEvent(Event= *event)` - initialize event
+  * `void WaitEvent(Event= *event)` - suspend until the next raise event is called by another
+    task
+  * `void EventEvent(Event= *event)` - event event and schedule all waiting tasks.
 
 * Timers module is optional, it implements timed waits and schedules a process to run when its
   requested delay has run out.
@@ -100,3 +131,6 @@ latency but does make it thread safe.
   * `void WaitSecs(uint16_t secs)` - wait for up to 65535 s, 18hrs 12min 15sec before
     rescheduling
 
+* Mutexes same as a single count Semaphore but allows the owner task to call lock multiple times
+  without suspending. Unlock must be called equal number of times that lock was called to fully
+  relinquish the mutex. Max lock count is 256, after which there is a rollover.

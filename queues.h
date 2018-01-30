@@ -2,14 +2,24 @@
 // Created by Vladimir Schneider on 2018-01-28.
 //
 #include "stdint.h"
-#include "helpers.h"
+#include "options.h"
 
-#ifndef SDCC_TEST_QUEUES_H
+#ifndef MULTI_TASKER_QUEUES_H
+
+typedef struct QNode QNode, QList;
 
 struct QNode
 {
-    struct QNode *prev;
-    struct QNode *next;
+    union
+    {
+        QNode *prev;
+        QNode *head;
+    };
+    union
+    {
+        QNode *next;
+        QNode *tail;
+    };
 };
 
 // for asm code, offsets to structure's fields
@@ -18,16 +28,18 @@ struct QNode
 #define QTAIL QPREV
 #define QHEAD QNEXT
 
-typedef struct QNode QNode;
+// synonyms for asm code
+#define __QNodeLinkTailInXY __QNodeLinkPrevInXY
+#define __QNodeLinkHeadInXY __QNodeLinkNextInXY
 
-extern void InitQNode(QNode *node);  // sets the two word pointers to QPREV
+extern void InitQNode(QNode *node);  // sets the two pointers to node
 extern void QNodeUnlink(QNode *node);  // unlink node, if has prev then node.prev->next = node.next, if has next then node.next->prev = node.prev
 extern uint8_t QNodeTest(QNode *node);  // return 0 if empty
 extern void QNodeLinkPrev(QNode *node, QNode *other);  // link Y before X
-extern void QNodeLinkTail(QNode *queue, QNode *node);  // link Y at tail of queue (same as link before)
+extern void QNodeLinkTail(QList *queue, QNode *node);  // link Y at tail of queue (same as link before)
 extern void QNodeLinkNext(QNode *node, QNode *other);  // link Y after X
-extern void QNodeLinkHead(QNode *queue, QNode *node);  // link Y at head of queue (same as link after0
+extern void QNodeLinkHead(QList *queue, QNode *node);  // link Y at head of queue (same as link after0
 
-#define SDCC_TEST_QUEUES_H
+#define MULTI_TASKER_QUEUES_H
 
-#endif //SDCC_TEST_QUEUES_H
+#endif //MULTI_TASKER_QUEUES_H
