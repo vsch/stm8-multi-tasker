@@ -56,7 +56,7 @@ latency.
 | Semaphores | Resource lock Acquire/Release          |            0 |           74 | per Semaphore: 5               |
 | Events     | Multi task event synchronization       |            0 |           49 | per Event: 4                   |
 | Mutexes    | Multi task lock synchronization        |            0 |          107 | per Mutex: 7                   |
-| **All**    | All options loaded                     |       **34** |      **970** |                                |
+| **All**    | All options enabled                    |       **34** |      **976** |                                |
 
 ## Usage Examples
 
