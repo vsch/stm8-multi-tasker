@@ -35,14 +35,13 @@ from having one task's call interrupted and then another task making the call fr
 context. There are two ways of handling this:
 
 * Guard these functions with a Mutex to prevent another task from entering until the last task
-  leaves. Declare a mutex variable, initialize it. Then for a set of functions if you want then
-  do a call first do `LockMutex(&mutex)` then call the function and then `UnlockMutex(&mutex)`
+  leaves.
 
-* if the location where the function/library stores its temp variables or global state is known
-  and the extra stack space available, then you can use the global state preserving option
-  `OPT_PRESERVE_GLOBAL_STATE`, write two functions to save state and restore state. These will
-  be called whenever there is a task switch. Use sparingly because the extra space on the stack
-  will need to be allocated for every task.
+* If the location where the function/library stores its temp variables or global state is known
+  and extra stack space available, then you can use the global state preserving option
+  `OPT_PRESERVE_GLOBAL_STATE`, write two functions to save state to stack and restore state from
+  stack. These will be called whenever there is a task switch. Use sparingly because the extra
+  space on the stack will need to be allocated for every task and done on every task switch.
 
 Assembly routines are for default compilation with caller saving registers it wants preserved.
 
