@@ -92,7 +92,7 @@ void main(void)
 
     InitQNode(&timer);
 
-    if (QNodeTest(&timer))
+    if (QNodeIsEmpty(&timer))
     {
         TIM1_CR1 ^= (1 << PIN_NUM);
     }

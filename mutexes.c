@@ -56,7 +56,8 @@ lockmutex.far:
     push cc
     rim
     ; x is already the mutex
-    jp      __IsrYieldToXTail
+    ldw     y,#__QNodeLinkTailInXY
+    jp      __IsrYieldToXatY
 
 lockmutex.owner:
     ; increment count
@@ -103,10 +104,7 @@ __asm
     ldw     (MUTEX_OWNER,x),y   ; give it ownership
 
     ldw     x,#_readyTasks
-    pushw   x
-    pushw   y
-    call    _QNodeLinkTail
-    addw    sp,#4
+    call    __QNodeLinkTailInXY
 
 unlock.done:
     pop     cc

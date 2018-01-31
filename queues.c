@@ -43,6 +43,7 @@ __endasm;
 
 /*
  * X - node
+ * interrupts disabled
  * return Y = X, X unchanged
  */
 void _QNodeUnlinkInX()__naked
@@ -92,12 +93,14 @@ __asm
     push    cc
     rim
     ldw     x,(2,sp)
-    jra     __QNodeUnlinkInX
+    call     __QNodeUnlinkInX
+    pop     cc
+    ret
 __endasm;
 // @formatter:on
 }
 
-uint8_t QNodeTest(QNode *node)__naked
+uint8_t QNodeIsEmpty(QNode *node)__naked
 {
     (void)node;
 //    uint8_t a;
@@ -107,6 +110,8 @@ uint8_t QNodeTest(QNode *node)__naked
 //    return a;
 // @formatter:off
 __asm
+    push    cc
+    rim
     ldw     x,(2,sp)
     ldw     y,x
     clr     a
@@ -114,6 +119,7 @@ __asm
     jreq    test.done
     inc     a
 test.done:
+    pop     cc
     ret
 __endasm;
 // @formatter:on
@@ -122,8 +128,8 @@ __endasm;
 /*
  * X - node
  * Y - other
+ * interrupts are disabled
  * return Y is first unlinked, then linked previous to X
- * interrupts are assumed to be disabled
  */
 void _QNodeLinkPrevInXY()__naked
 {
@@ -139,7 +145,7 @@ __asm
     exgw    x,y
     call    __QNodeUnlinkInX
     ; x & y both other
-    ldw     x,(1,sp)    ; x = node
+    ldw     x,(2,sp)    ; x = node
     ldw     (QNEXT,y),x ; other->next = node
     ldw     x,(QPREV,x)
     ldw     (QPREV,y),x ; other->prev = node->prev
@@ -176,8 +182,8 @@ void QNodeLinkTail(QNode *queue, QNode *node) __naked {
 /*
  * X - node
  * Y - other
+ * interrupts disabled
  * return Y is first unlinked, then linked after X
- * interrupts are assumed to be disabled
  */
 void _QNodeLinkNextInXY()
 {
@@ -193,7 +199,7 @@ __asm
     exgw    x,y
     call    __QNodeUnlinkInX
     ; x & y both other
-    ldw     x,(1,sp)    ; x = node
+    ldw     x,(2,sp)    ; x = node
     ldw     (QPREV,y),x ; other->prev = node
     ldw     x,(QNEXT,x)
     ldw     (QNEXT,y),x ; other->next = node->next

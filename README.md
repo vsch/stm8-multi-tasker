@@ -1,40 +1,37 @@
 # STM8-Multi-Tasker
 
-## Preemptive/Cooperative Round Robin Scheduler for STM8
+## Cooperative/Preemptive Round Robin Scheduler for STM8
 
-Stability: **Not Ready** **Work in Progress**
+Stability: **Not Ready** **In Development**
 
 Status: **Broken** **Do Not Use Yet**
 
 Version: **0.0**
 
-A tiny multi-tasker to allow threads with Stack context switching to be used on the STM8 micro
-processor.
+A tiny scheduler to allow threading with stack based context switching to be used on the STM8
+micro processor. Implemented with [SDCC] in mixed C and assembler. Using CMake with
+[JetBrains CLion IDE]. (TODO: Add Instructions on how to set it up to work reasonably well).
 
-Minimal functionality for cooperative multi tasking, no global state preservation: less than 256
-bytes of code and 8 bytes of data, with additional per task data needed: 6 + task's stack size.
+The core is written in assembler to reduce size. The [SDCC] compiler does not produce very
+efficient code for the STM8. I opted out to optimize reusable code so I can use C for specific
+projects with less concern for space.
 
-Minimal timer functionality of WaitTicks(uint16 ticks) for task suspension until number of clock
-ticks, will add: 261 bytes of code and 8 bytes of data. It will also increase per task use to 8
-\+ task's stack size.
+Minimal cooperative multi tasking is less than 250 bytes of code and 10 bytes of data, with
+additional per task data penalty of 6 bytes + task's stack size.
 
-With All features enabled will bite off 34 bytes of data and a bit under 1k of code + per task
-use to 8 + task's stack size.
+With tick timer functionality to allow timed suspensions, less than 500 bytes of code and 18
+bytes of data. It will also increase per task data use to 8 bytes + task's stack size.
 
-Implemented with [SDCC](http://sdcc.sourceforge.net) in mixed C and assembler. Using JetBrains
-CLion environment. (TODO: Add Instructions on how to set it up to work reasonably well).
+With All features enabled will clocks in under 1k of code, 34 bytes data + per task data use of
+8 bytes + task's stack size.
 
-Most of the core is written in assembler to reduce size. The SDCC compiler is not very efficient
-and I prefer to take time to optimize reusable code. C can then be used for specific projects
-with less concern for space.
-
-#### NOTE
+#### Multi Threading Caveats
 
 Any non re-entrant functions that are called with interrupts enabled will need to be protected
 from having one task's call interrupted and then another task making the call from another
 context. There are two ways of handling this:
 
-* Guard these functions with a Mutex to prevent another task from entering until the last task
+* Guard these functions with a Mutex to prevent other tasks from entering until the last task
   leaves.
 
 * If the location where the function/library stores its temp variables or global state is known
@@ -43,20 +40,18 @@ context. There are two ways of handling this:
   stack. These will be called whenever there is a task switch. Use sparingly because the extra
   space on the stack will need to be allocated for every task and done on every task switch.
 
-Assembly routines are for default compilation with caller saving registers it wants preserved.
+* Use a mix of above methods as needed.
 
-This library disables interrupts while manipulating structures. This will increased interrupt
-latency.
+* Use only cooperative scheduling and don't try to use shared, unlocked resources from ISRs
 
-| Module     | Functionality Provided                 | Data (bytes) | Code (bytes) | Per Instance Overhead (bytes)  |
-|:-----------|:---------------------------------------|-------------:|-------------:|:-------------------------------|
-| Queues     | Circular linked lists                  |            0 |          121 | per QNode or Queue: 4          |
-| Tasks      | Cooperative/Preemptive multi-tasking   |            8 |          186 | per Task: 6  + task stack size |
-| Timers     | Timed wait, tick, millisec and seconds |           26 |          438 | per Task: 2                    |
-| Semaphores | Resource lock Acquire/Release          |            0 |           74 | per Semaphore: 5               |
-| Events     | Multi task event synchronization       |            0 |           49 | per Event: 4                   |
-| Mutexes    | Multi task lock synchronization        |            0 |          107 | per Mutex: 7                   |
-| **All**    | All options enabled                    |       **34** |      **976** |                                |
+#### Library Limitations
+
+* all assembly routines are written for default SDCC compilation of caller saving registers.
+* Interrupts are disabled while in library calls. This will increased interrupt response
+  latency.
+
+On the plus side, I was using this scheduler design on a Z80 running at a whopping 1MHz. Having
+a real context switcher to simplify logic and implementation was well worth the overhead.
 
 ## Usage Examples
 
@@ -69,67 +64,73 @@ latency.
 
 ## Features
 
-* Circular linked list queues and nodes. Queues and nodes are interchangeable. An empty queue is
+* Circular linked list queues and nodes. Lists and nodes are interchangeable. An empty queue is
   one linked to itself, just like an unlinked node. Head of queue is the next pointer, tail is
   the previous pointer.
 
-  * `void QInit(QNode *node)` - initializes the node/queue in X to unlinked/empty
-  * `void QUnlink(QNode *node)` - unlink node
-  * `uint8_t QTest(QNode *node)` - test node/queue for being empty, returns 0 if empty
-  * `void QNodeLinkPrev(QNode *node, QNode *other)` - link other before node
-  * `void QNodeLinkNext(QNode *node, QNode *other)` - link other after node
-  * `void QNodeLinkTail(QNode *queue, QNode *node)` - same as link previous, links node to tail
-    of queue
-  * `void QNodeLinkHead(QNode *queue, QNode *node)` - same as link next, links node to head of
-    queue
+  * Initialize node
+  * Unlink node
+  * Link after next/previous node or head/tail of a list. Will unlink the node before linking it
+    into a new list.
+  * Test if node is unlinked or list is empty.
+
+  All elements in the library are QLists or QNodes.
 
 * Scheduler, implements round robin cooperative scheduling or optionally with preemptive
-  capability when a task exceeds maximum time slice, configured in timer ticks.
+  capability when a task exceeds maximum time slice in timer ticks.
 
-  Each process has 9 bytes of overhead + its stack area size. Since each process is a QNode it
-  can be waiting for at most one Timer, Event or Semaphone, while waiting it is linked into the
-  corresponding queue.
+  * Initialize task
+  * Yield to relinquish CPU, or on time slice max (if preemptive option is enabled)
+  * Global state save/restore via user provided functions to push/pop global state on task
+    switch
 
-  * `void InitTasks()` - initialize scheduler data structures. Do this on reset before enabling
-    interrupts or adding any processes to the scheduler.
-  * `void InitTask(Task *task, void *taskSP, uint8_t taskPriority)` - initialize task data
-    structure and queue it for execution.
-  * `void Yield()` - switches out the context of the current task and resumes the next ready
-    task.
+* Timers implement timed waits to resume a task after delay.
 
-* Semaphores implement waiting on limited resources. Each starts off with an initial count.
-  Every acquisition will decrement the count, release will increment the count and allow any
-  tasks waiting to acquire the resource to resume.
+  * WaitTicks - suspend for up to 65535 timer ticks before resuming, tick period defined by
+    timer ISR calls.
+  * WaitTicksAdj - suspend for up to 65535 timer ticks before resuming. Adjusts requested ticks
+    to compensate for scheduling delay incurred during last resume from a WaitTicks or
+    WaitTicksAdj.
+  * WaitMillis - suspend for up to 65535 ms, 65.535 secs
+  * WaitSecs - suspend for up to 65535 s, 18hrs 12min 15sec before rescheduling
 
-  * `void InitSema(Seam *sema, uint8_t initialCount)` - initialize semaphore and set avail
-    resources
-  * `void AcquireSema(Seam *sema)` - get a single count of the resource, or suspend until one
-    becomes available
-  * `void ReleaseSema(Seam *sema)` - return a single count of the resource. A task waiting for
-    the resource will be scheduled to resume.
+* Semaphores implement time allocation of limited resources. Semaphore starts off with initial
+  count of available resources. Every acquisition decrements the count by one, release
+  increments it by one. A task trying to acquire a semaphore will suspend until at least one
+  resource is free.
+
+  * Initialize semaphore passing in initial resource count
+  * Acquire semaphore - get single count of resource or suspend until available
+  * Release semaphore - release single count of resource
 
 * Events implement multiple tasks waiting on event, with all tasks resumed when the event is
   raised.
 
-  * `void InitEvent(Event= *event)` - initialize event
-  * `void WaitEvent(Event= *event)` - suspend until the next raise event is called by another
-    task
-  * `void EventEvent(Event= *event)` - event event and schedule all waiting tasks.
+  * Initialize event
+  * Wait for event - suspend until the next event signal
+  * Signal an event - resume all tasks waiting for the event
 
-* Timers module is optional, it implements timed waits and schedules a process to run when its
-  requested delay has run out.
-
-  * `void InitTimers()` - initialize timers module, call before setting up or enabling timer
-    interrupts
-  * `void WaitTicks(uint16_t ticks)` - wait for up to 65535 timer ticks before resuming.
-  * `void WaitTicksAdj(uint16_t ticks)` - wait for up to 65535 timer ticks before resuming,
-    actual ticks will be reduced by difference of (last task resume from timed wait) and (tick
-    time of this call).
-  * `void _TickTimerIsr()` - timer tick interrupt handler
-  * `void WaitMillis(uint16_t millis)` - wait for up to 65535 ms, 65.535 secs
-  * `void WaitSecs(uint16_t secs)` - wait for up to 65535 s, 18hrs 12min 15sec before
-    rescheduling
-
-* Mutexes same as a single count Semaphore but allows the owner task to call lock multiple times
+* Mutexes same as a single count semaphore but allows the owner task to call lock multiple times
   without suspending. Unlock must be called equal number of times that lock was called to fully
-  relinquish the mutex. Max lock count is 256, after which there is a rollover.
+  relinquish the mutex. Max lock count is 256.
+
+  * Initialize Mutex
+  * Lock mutex - get ownership of mutex, increment its lock count or suspend until mutex is
+    free.
+  * Unlock mutex - decrement lock count, if becomes unlocked then relinquish ownership.
+    Ownership will be given to first task suspended by lock mutex request.
+
+## Per Module Resource Requirements
+
+| Module     | Functionality Provided                 | Data (bytes) | Code (bytes) | Per Instance Overhead (bytes)  |
+|:-----------|:---------------------------------------|-------------:|-------------:|:-------------------------------|
+| Queues     | Circular linked lists                  |            0 |          127 | per QNode or Queue: 4          |
+| Tasks      | Cooperative/Preemptive multi-tasking   |           10 |           64 | per Task: 6  + task stack size |
+| Timers     | Timed wait, tick, millisec and seconds |           24 |          427 | per Task: 2                    |
+| Semaphores | Resource lock Acquire/Release          |            0 |           73 | per Semaphore: 5               |
+| Events     | Multi task event synchronization       |            0 |           48 | per Event: 4                   |
+| Mutexes    | Multi task lock synchronization        |            0 |          106 | per Mutex: 7                   |
+| **All**    | All options enabled                    |       **34** |      **885** |                                |
+
+[JetBrains CLion IDE]: https://www.jetbrains.com/clion/?fromMenu
+[SDCC]: http://sdcc.sourceforge.net

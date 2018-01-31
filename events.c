@@ -29,8 +29,10 @@ waitevent.far:
     push cc
     rim
     ldw     x,(10,sp)  ; get event
+
     ; put this one in the queue
-    jp      __IsrYieldToXTail
+    ldw     y,#__QNodeLinkTailInXY
+    jp      __IsrYieldToXatY
 __endasm;
 // @formatter:on
 }
@@ -54,10 +56,7 @@ raise.loop:
 
     ldw     y,(QTAIL,y) ; get last so when linked at head will result in FIFO order
     ldw     x,#_readyTasks
-    pushw   x
-    pushw   y
-    call    _QNodeLinkHead ; push to start of queue so gets faster rescheduling
-    addw    sp,#4  ; drop prev task
+    call    __QNodeLinkHeadInXY ; push to start of queue so gets faster rescheduling
     jra     raise.loop
 
 release.done:

@@ -7,7 +7,6 @@
 #ifdef OPT_TICK_TIMER
 
 uint16_t tickTime; // incrementing tick counter
-
 Timer mainTimer;
 
 #ifdef OPT_MILLI_TIMER
@@ -31,10 +30,11 @@ uint16_t taskSliceTicks; // ticks left for this task
  *
  *  When the main timer's tick count goes to 0 on the next TimerIsr, all leading nodes with tick count of 0 get scheduled.
  *
+ *  These parameters are the same as for Queing Functions, So this function is passed to YieldToXatY to do the task switch
  *  X - timer
  *  Y - task
  */
-void _AddTimerTaskInXY()__naked
+void _AddTaskYtoTimerX()__naked
 {
 //    Task *other;
 //    if (timer->ticks > node->ticks) {
@@ -272,7 +272,6 @@ typedef void (*QFunc)(QNode *, QNode *);
  *
  *
  */
-
 void _DoTimerTickInXY()__naked
 {
 //    // decrement ticks and if 0 schedule all nodes whose ticks are 0
@@ -293,7 +292,7 @@ void _DoTimerTickInXY()__naked
 //    }
 // @formatter:off
 __asm
-    ldw     __savedReturn,y ; save func in memory
+    ldw     __queueFunction,y ; save func in memory
     ldw     y,x
     ldw     y,(TIMER_TICK,y)
     jreq    dotimer.done
@@ -324,7 +323,7 @@ __endasm;
 __asm
     exgw    x,y
     ldw     x,#_readyTasks ; x = readyTasks, y = task
-    call    [__savedReturn]
+    call    [__queueFunction]
     jra     dotimer.do
 
 dotimer.while:
@@ -355,20 +354,6 @@ __asm
     ldw     _tickTime,x
 __endasm;
 
-#ifdef OPT_PREEMPT
-__asm
-    ; dec task timeslice
-    ldw     x,_taskSliceTicks
-    decw    x
-    ldw     _taskSliceTicks,x
-    jrne    tick.no_preempt
-
-    ; pre-empt the current task
-    call    __IsrPreemptTail
-tick.no_preempt:
-__endasm;
-#endif
-
 #ifdef OPT_MILLI_TIMER
 __asm
     ldw     x,_milliPrescaler
@@ -383,6 +368,7 @@ __asm
 tick.milli_save:
     ldw     _milliPrescaler,x
 __endasm;
+#endif
 
 #ifdef OPT_SEC_TIMER
 __asm
@@ -400,15 +386,34 @@ tick.sec_save:
 __endasm;
 #endif
 
-#endif
 __asm
     ; now do mainTimer
     ldw     x,#_mainTimer
     ldw     y,_QNodeLinkHead
     call    __DoTimerTickInXY
 tick.done:
+__endasm;
+
+#ifdef OPT_PREEMPT
+__asm
+    ; now we see if we preempt the current task
+    ; dec task timeslice
+    ldw     x,_taskSliceTicks
+    decw    x
+    ldw     _taskSliceTicks,x
+    jreq    tick.preempt
+    iret
+
+tick.preempt:
+    ; pre-empt the current task
+    jp      __YieldToTail
+__endasm;
+#else
+__asm
     iret
 __endasm;
+#endif
+
 // @formatter:on
 }
 
@@ -442,7 +447,9 @@ waitadj.notrolled:
     clrw    y   ; no wait, delayed too long
 waitadj.done:
     ldw     (3,sp),y ; overwrite with adjusted tick count
-    jra     _WaitTicks ; do the usual thing
+
+    ; fallthrough to next function, assume function order is fixed by source
+    ;jra     _WaitTicks ; do the usual thing
 __endasm;
 // @formatter:on
 }
@@ -466,7 +473,9 @@ waitticks.far:
     rim
     ldw     y,(10,sp)  ; get passed parameter ticks
     ldw     x,#_mainTimer
-    jra     __WaitCommon
+
+    ; fallthrough to next function, assume function order is fixed by source
+    ;jra     __WaitCommon
 __endasm;
 // @formatter:on
 }
@@ -474,7 +483,7 @@ __endasm;
 void _WaitCommon()__naked
 {
 // @formatter:off
-    // all registers pushed on stack ready for _IsrYieldJmp call
+    // all registers pushed on stack ready for _YieldXtoY call
     // X is timer
     // Y is ticks
 __asm
@@ -482,22 +491,16 @@ __asm
     jrne    wait.1
 
     ; already 0, yield
-    jp     __IsrYieldJmp
+    jp     __YieldToTail
 
 wait.1:
     pushw   x
     ldw     x,_currentTask
     ldw     (TIMER_TICK,x),y    ; set timer ticks
 
-    ; timer already on stack
-    exgw    x,y ; y = task
-    popw    x ; x = timer
-    call    __AddTimerTaskInXY
-
-    clr    _currentTask
-    clr    _currentTask+1
-
-    jp      __IsrYieldJmp
+    popw    x ; x is timer
+    ldw     y,#__AddTaskYtoTimerX
+    jp      __IsrYieldToXatY
 __endasm;
 // @formatter:on
 }

@@ -46,7 +46,8 @@ acquire.far:
     rim
 
     ; put this one in the queue
-    jp      __IsrYieldToXTail
+    ldw     y,#__QNodeLinkTailInXY
+    jp      __IsrYieldToXatY
 
 acquire.done:
     dec     a
@@ -73,10 +74,7 @@ __asm
 
     ldw     y,(QHEAD,y)
     ldw     x,#_readyTasks
-    pushw   x
-    pushw   y
-    call    _QNodeLinkTail
-    addw    sp,#4
+    call    __QNodeLinkTailInXY
     jra     release.done
 
 release.decr:

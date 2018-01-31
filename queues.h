@@ -34,7 +34,7 @@ struct QNode
 
 extern void InitQNode(QNode *node);  // sets the two pointers to node
 extern void QNodeUnlink(QNode *node);  // unlink node, if has prev then node.prev->next = node.next, if has next then node.next->prev = node.prev
-extern uint8_t QNodeTest(QNode *node);  // return 0 if empty
+extern uint8_t QNodeIsEmpty(QNode *node);  // return 0 if empty
 extern void QNodeLinkPrev(QNode *node, QNode *other);  // link Y before X
 extern void QNodeLinkTail(QList *queue, QNode *node);  // link Y at tail of queue (same as link before)
 extern void QNodeLinkNext(QNode *node, QNode *other);  // link Y after X

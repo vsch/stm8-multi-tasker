@@ -11,7 +11,8 @@ QNode readyTasks;       // queue of ready tasks
 extern uint16_t taskSliceTicks; // ticks left for this task
 #endif
 
-void *_savedReturn; // return value when we manipulate the stack
+void *_queueFunction; // option passed to vary function called
+void *_taskQueue;    // option passed to vary which queue the task is moved
 
 void InitTasks() __naked
 {
@@ -73,144 +74,60 @@ void Yield()__naked
 {
 // @formatter:off
 __asm
-    ldw     __savedReturn,x  ; save x register
-    popw    x ; get return address
-    callf   yield.far
-yield.far:
-    ; here the stack looks like the following was done: push pcl, push pch, push pce
-    ldw    (1,sp),x ; overwrite return with callers address
-    ldw     x,__savedReturn ; restore x, not strictly needed but nice to have
+    push    cc
+    rim
+    callf   yield.far    ; now we simulate an ISR stack
+    pop     cc           ; task will be resumed here
+    ret
 
+yield.far:
     ; simulate an interrupt stack
     pushw y
     pushw x
     push a
     push cc
     rim
-    jra   __IsrYieldJmp
+
+    ; fallthrough to next function, assume function order is fixed by source
+    ; jra   __YieldToTail
 __endasm;
-// @formatter:on
-}
-
-#ifdef OPT_PREEMPT
-/*
- * causes the current task to be moved to tail of ready queue.
- * current task set to 0
- * The task is not re-scheduled until the next task yield.
- *
- * interrupts disabled, assumes SP+2 is ready for iret
- */
-void _IsrPreemptTail()__naked
-{
-// @formatter:off
-__asm
-    ; assumes registers already pushed and interrupts disabled
-    ldw     x,_currentTask
-    jrne    preempt.task
-    ret
-
-preempt.task:
-    ; now pop return address and call save state, if needed
-    popw     y
-    ldw     __savedReturn,y ; save our return address
-__endasm;
-
-#ifdef OPT_PRESERVE_GLOBAL_STATE
-__asm
-    call    _RestoreGlobalState
-__endasm;
-#endif
-
-__asm
-    ; clear current task
-    clrw    y
-    ldw     _currentTask,y
-
-    ldw     y,sp
-    ldw     (TASK_SP,x),y ; save task context
-
-    ldw     y,#_readyTasks
-    exgw    x,y
-    call    __QNodeLinkTailInXY
-    jp      [__savedReturn]
-
-__endasm;
-
 // @formatter:on
 }
 
 /*
- * causes the current task to be moved to head of ready queue.
- * current task set to 0
- * The task is not re-scheduled until the next task yield.
- *
- * interrupts disabled, assumes SP+2 is ready for iret
+ * Jmp to this once the stack is as after an interrupt
+ * All ready to yield,
  */
-void _IsrPreemptHead()__naked
+void _YieldToTail()__naked
 {
 // @formatter:off
 __asm
-    ; assumes registers already pushed and interrupts disabled
-    ldw     x,_currentTask
-    jrne    preempth.task
-    ret
+    ldw     x,#_currentTask
+    ldw     y,#__QNodeLinkTailInXY
 
-preempth.task:
-    ; now pop return address and call save state, if needed
-    popw     y
-    ldw     __savedReturn,y ; save our return address
-__endasm;
-
-#ifdef OPT_PRESERVE_GLOBAL_STATE
-__asm
-    call    _RestoreGlobalState
-__endasm;
-#endif
-
-__asm
-    ; clear current task
-    clrw    y
-    ldw     _currentTask,y
-
-    ldw     y,sp
-    ldw     (TASK_SP,x),y ; save task context
-
-    ldw     y,#_readyTasks
-    exgw    x,y
-    call    __QNodeLinkHeadInXY
-    jp      [__savedReturn]
-
-__endasm;
-
-// @formatter:on
-}
-#endif
-
-// assumes all registers pushed as per interrupt and interrupts are disabled
-// must be jumped to with:
-// X : Queue to which to append the current task and then do a _IsrYieldJmp
-void _IsrYieldToXTail()__naked {
-// @formatter:off
-__asm
-    ; wait for raise event call
-    ldw     y,_currentTask
-    call    __QNodeLinkTailInXY
-
-    clr    _currentTask
-    clr    _currentTask+1
-
-    jra     __IsrYieldJmp
+    ; fallthrough to next function, assume function order is fixed by source
+    ; jra   __IsrYieldToXatY
 __endasm;
 // @formatter:on
 }
 
-// assumes all registers pushed as per interrupt and interrupts are disabled
-// must be jumped to
-void _IsrYieldJmp()__naked {
+/* assumes all registers pushed as per interrupt and interrupts are disabled
+ *
+ * must be jumped to
+ * X : is the queue to put the task into after preempting
+ * Y : is function to queue the task should be __QNodeLinkTailInXY or __QNodeLinkHeadInXY
+ *
+ * overwrites
+ * _queueFunction
+ * _taskQueue
+ */
+
+void _IsrYieldToXatY()__naked {
 // @formatter:off
 __asm
-    ; yield to next available process, if none is available then returns
-    ; assumes registers already pushed and interrupts disabled
+    ldw     __taskQueue,x
+    ldw     __queueFunction,y
+
     ldw     x,_currentTask
     jreq    yield.next ; no current proc, just schedule next
 __endasm;
@@ -218,17 +135,18 @@ __endasm;
 #ifdef OPT_PRESERVE_GLOBAL_STATE
 __asm
     call    _SaveGlobalState
-    ldw     x,_currentTask      ; restore x
+    ldw     y,_currentTask
 __endasm;
 #endif
 
 __asm
-    ldw     y,sp
-    ldw     (TASK_SP,x),y ; save context
+    ldw     x,sp
+    ldw     (TASK_SP,y),x ; save context
 
-    exgw    x,y
-    ldw     x,#_readyTasks
-    call    __QNodeLinkTailInXY
+    ; put task in queue
+    ldw     x,[__taskQueue]
+    call    [__queueFunction]
+    ; after the call do not assume x/y content, could be another function
 
 yield.next:
     ldw     x,#_readyTasks
