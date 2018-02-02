@@ -13,16 +13,18 @@ micro processor. Implemented with [SDCC] in mixed C and assembler. Using CMake w
 [JetBrains CLion IDE]. (TODO: Add Instructions on how to set it up to work reasonably well).
 
 The core is written in assembler to reduce size. The [SDCC] compiler does not produce very
-efficient code for the STM8. I opted out to optimize reusable code so I can use C for specific
+efficient code for the STM8. I opted out to optimize reusable code, then I can use C for specific
 projects with less concern for space.
 
-Minimal cooperative multi tasking is less than 250 bytes of code and 10 bytes of data, with
+<!--
+Minimal cooperative multi tasking is less than 500 bytes of code and 8 bytes of data, with
 additional per task data penalty of 6 bytes + task's stack size.
 
-With tick timer functionality to allow timed suspensions, less than 500 bytes of code and 18
+With tick timer functionality to allow timed suspensions, less than 700 bytes of code and 16
 bytes of data. It will also increase per task data use to 8 bytes + task's stack size.
+ -->
 
-With All features enabled will clocks in under 1k of code, 34 bytes data + per task data use of
+With All features enabled, clocks in just over 1k of code, 34 bytes data + per task data use of
 8 bytes + task's stack size.
 
 #### Multi Threading Caveats
@@ -79,7 +81,6 @@ a real context switcher to simplify logic and implementation was well worth the 
 * Scheduler, implements round robin cooperative scheduling or optionally with preemptive
   capability when a task exceeds maximum time slice in timer ticks.
 
-  * Initialize task
   * Yield to relinquish CPU, or on time slice max (if preemptive option is enabled)
   * Global state save/restore via user provided functions to push/pop global state on task
     switch
@@ -106,7 +107,6 @@ a real context switcher to simplify logic and implementation was well worth the 
 * Events implement multiple tasks waiting on event, with all tasks resumed when the event is
   raised.
 
-  * Initialize event
   * Wait for event - suspend until the next event signal
   * Signal an event - resume all tasks waiting for the event
 
@@ -114,7 +114,6 @@ a real context switcher to simplify logic and implementation was well worth the 
   without suspending. Unlock must be called equal number of times that lock was called to fully
   relinquish the mutex. Max lock count is 256.
 
-  * Initialize Mutex
   * Lock mutex - get ownership of mutex, increment its lock count or suspend until mutex is
     free.
   * Unlock mutex - decrement lock count, if becomes unlocked then relinquish ownership.
@@ -122,15 +121,16 @@ a real context switcher to simplify logic and implementation was well worth the 
 
 ## Per Module Resource Requirements
 
-| Module     | Functionality Provided                 | Data (bytes) | Code (bytes) | Per Instance Overhead (bytes)  |
-|:-----------|:---------------------------------------|-------------:|-------------:|:-------------------------------|
-| Queues     | Circular linked lists                  |            0 |          127 | per QNode or Queue: 4          |
-| Tasks      | Cooperative/Preemptive multi-tasking   |           10 |           64 | per Task: 6  + task stack size |
-| Timers     | Timed wait, tick, millisec and seconds |           24 |          427 | per Task: 2                    |
-| Semaphores | Resource lock Acquire/Release          |            0 |           73 | per Semaphore: 5               |
-| Events     | Multi task event synchronization       |            0 |           48 | per Event: 4                   |
-| Mutexes    | Multi task lock synchronization        |            0 |          106 | per Mutex: 7                   |
-| **All**    | All options enabled                    |       **34** |      **885** |                                |
+| Module         | Functionality Provided                 | Data (bytes) | Code (bytes) | Per Instance Overhead (bytes)  |
+|:---------------|:---------------------------------------|-------------:|-------------:|:-------------------------------|
+| Initialization | required                               |            4 |          121 |                                |
+| Queues         | Circular linked lists                  |            0 |          131 | per Node or List: 4            |
+| Tasks          | Cooperative/Preemptive multi-tasking   |           10 |          186 | per Task: 6  + task stack size |
+| Timers         | Timed wait, tick, millisec and seconds |           24 |          378 | per Task: 2                    |
+| Semaphores     | Resource lock Acquire/Release          |            0 |           55 | per Semaphore: 5               |
+| Events         | Multi task event synchronization       |            0 |           60 | per Event: 4                   |
+| Mutexes        | Multi task lock synchronization        |            0 |          121 | per Mutex: 7                   |
+| **All**        | All options enabled                    |       **38** |     **1052** |                                |
 
 [JetBrains CLion IDE]: https://www.jetbrains.com/clion/?fromMenu
 [SDCC]: http://sdcc.sourceforge.net

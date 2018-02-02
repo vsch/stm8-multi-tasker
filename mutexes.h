@@ -5,7 +5,7 @@
 #ifndef MULTI_TASKER_MUTEXES_H
 #define MULTI_TASKER_MUTEXES_H
 
-#include "tasks.h"
+#include "stdint.h"
 
 typedef struct Mutex {
     struct Task *prev;
@@ -18,8 +18,9 @@ typedef struct Mutex {
 #define MUTEX_OWNER 4
 #define MUTEX_LOCKS 6
 
-extern void InitMutex(Mutex *mutex);
+#pragma callee_saves InitMutex, LockMutex, UnlockMutex
+
 extern void LockMutex(Mutex *mutex);
 extern void UnlockMutex(Mutex *mutex);
 
-#endif //MULTI_TASKER_MUTEXPHORES_H
+#endif //MULTI_TASKER_MUTEXES_H

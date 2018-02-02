@@ -2,16 +2,17 @@
 // Created by Vladimir Schneider on 2018-01-30.
 //
 
-#include "mutexes.h"
+#include "multitasker.h"
 
-void InitMutex(Mutex *mutex)__naked
+const uint16_t mutexDescriptionSize = sizeof(MutexDescription);
+
+void _InitMutexInX(Mutex *mutex)__naked
 {
     (void) mutex;
 //    mutex->owner = 0;
-//    InitQNode((QNode *) mutex);
+//    QInitNode((QNode *) mutex);
 // @formatter:off
 __asm
-    ldw     x,(3,sp) ; mutex
     clrw    y
     ldw     (MUTEX_OWNER,x),y
     jp      __InitQNodeInX
@@ -23,9 +24,8 @@ void LockMutex(Mutex *mutex)__naked {
     (void) mutex;
 // @formatter:off
 __asm
-    push cc
-    rim
-    ldw     x,(4,sp)  ; get mutex
+    sim
+    ldw     x,(3,sp)  ; get mutex, sp: pch, pcl, ev.h, ev.l
 
     ldw     y,x
     ldw     y,(MUTEX_OWNER,y)
@@ -41,33 +41,19 @@ lockmutex.check:
     cpw     y,_currentTask
     jreq    lockmutex.owner
 
-    ; put this one in the queue
-    pop     cc
-    popw    y ; get return address
-    callf   lockmutex.far
-lockmutex.far:
-    ; here the stack looks like the following was done: push pcl, push pch, push pce
-    ldw    (1,sp),y ; overwrite return with callers address
-
-    ; simulate an interrupt stack
-    pushw y
-    pushw x
-    push a
-    push cc
-    rim
     ; x is already the mutex
     ldw     y,#__QNodeLinkTailInXY
-    jp      __IsrYieldToXatY
+    jp      __YieldToXatYStack
 
 lockmutex.owner:
     ; increment count
     inc   (MUTEX_LOCKS,x)
 
     ; jrne  lockmutex.done
-    ; bad condition, mutex lock overflow, hope for the best
+    ; problem now after next lock, the unlock will make mutex think it is unlocked
 
 lockmutex.done:
-    pop     cc
+    rim
     ret
 
 __endasm;
@@ -79,8 +65,8 @@ void UnlockMutex(Mutex *mutex)__naked {
 // @formatter:off
 __asm
     push cc
-    rim
-    ldw     x,(4,sp)  ; get mutex
+    sim
+    ldw     x,(3,sp)  ; get mutex sp: pch, pcl, ev.h, ev.l
     ldw     y,x
     ldw     y,(MUTEX_OWNER,y)
     jreq    unlock.done      ; no owner

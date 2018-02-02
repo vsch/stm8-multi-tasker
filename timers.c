@@ -1,27 +1,87 @@
 //
 // Created by Vladimir Schneider on 2018-01-28.
 //
+#include "multitasker.h"
 
-#include "timers.h"
+#ifdef OPT_TIMERS
 
 #ifdef OPT_TICK_TIMER
 
-uint16_t tickTime; // incrementing tick counter
 Timer mainTimer;
-
+uint16_t tickTime; // incrementing tick counter
 #ifdef OPT_MILLI_TIMER
-uint16_t milliPrescaler; // decremented every mainTick, on zero does milliTick
 Timer milliTimer;
+uint16_t milliPrescaler; // decremented every mainTick, on zero does milliTick
 
 #ifdef OPT_SEC_TIMER
 uint16_t secPrescaler; // decrement every milliTick, on zero do secTick
-Timer secTimer;
-#endif
 #endif
 
 #ifdef OPT_PREEMPT
+Timer secTimer;
 uint16_t taskSliceTicks; // ticks left for this task
 #endif
+
+#ifdef OPT_MILLI_TIMER
+#ifdef OPT_SEC_TIMER
+#define TIMER_COUNT 3
+#else
+#define TIMER_COUNT 2
+#endif
+#else
+#define TIMER_COUNT 1
+#endif
+#endif
+#endif
+
+const uint16_t timerSize = sizeof(Timer);
+
+/*
+ * Call this after reset and before staring any interrupts
+ *
+ * Interrupts should be disabled.
+ */
+void InitTimers()__naked
+{
+// @formatter:off
+__asm
+    clrw     y
+    ldw     x,#_mainTimer
+    ldw     (TIMER_TICK, x), y
+    ld      a,#TIMER_COUNT
+init.loop:
+    call    __InitQNodeInX
+    addw    x,_timerSize
+    dec     a
+    jrne    init.loop
+__endasm;
+// @formatter:on
+
+#ifdef OPT_MILLI_TIMER
+// @formatter:off
+__asm
+    ldw     x,#_milliTimer
+    ldw     y,#MAIN_TICKS_PER_MILLI
+    ldw     (TIMER_TICK,x),y
+__endasm;
+// @formatter:on
+
+#ifdef OPT_SEC_TIMER
+// @formatter:off
+__asm
+    ldw     x,#_secTimer
+    ldw     y,#1000
+    ldw     (TIMER_TICK, x),y
+__endasm;
+// @formatter:on
+#endif
+#endif
+
+__asm
+    ret
+__endasm;
+}
+
 
 /*
  *  Add a given timer node to the main timer queue
@@ -131,7 +191,7 @@ add.do:
     ldw     x,(QNEXT,x)  ; x = other->next
 
     ; x = other->next, y = node
-    cpw     x,(2,sp) ; timer
+    cpw     x,(1,sp) ; timer
     jrne    add.head
     ; reached end of queue
 
@@ -182,91 +242,6 @@ __endasm;
 // @formatter:on
 }
 
-void _InitTimer(Timer *timer, uint16_t tick)__naked
-{
-    (void) timer;
-    (void) tick;
-//    timer->ticks = tick;
-//    InitQNode((QNode *) timer);
-// @formatter:off
-__asm
-    ldw     y,(2,sp) ; tick
-    ldw     x,(4,sp) ; timer
-    ldw     (TIMER_TICK,x),y
-    jp      __InitQNodeInX
-__endasm;
-// @formatter:on
-}
-
-/*
- * Call this after reset and before staring any interrupts
- *
- * Interrupts should be disabled.
- */
-void InitTimers()__naked
-{
-//    _InitTimer(&mainTimer, 0);
-//#ifdef OPT_MILLI_TIMER
-//    _InitTimer(&milliTimer, 0);
-//    milliPrescaler = MAIN_TICKS_PER_MILLI;
-//    (void) milliPrescaler;
-//#ifdef OPT_SEC_TIMER
-//    _InitTimer(&secTimer, 0);
-//    secPrescaler = 1000;
-//    (void) secPrescaler;
-//#endif
-//#endif
-
-    //_InitTimer(&mainTimer, 0);
-    // @formatter:off
-__asm
-    clrw     y
-    ldw     x,#_mainTimer
-    ldw     (TIMER_TICK,x),y
-    call      __InitQNodeInX
-__endasm;
-    // @formatter:on
-
-#ifdef OPT_PREEMPT
-    //taskSliceTicks = TASK_SLICE_TICKS * MAIN_TICKS_PER_MILLI; // decrement every milliTick, on zero do secTick
-// @formatter:off
-__asm
-    ldw     x,TASK_SLICE_TICKS * MAIN_TICKS_PER_MILLI
-    ldw     _taskSliceTicks,x
-__endasm;
-// @formatter:on
-#endif
-
-#ifdef OPT_MILLI_TIMER
-//    _InitTimer(&milliTimer, 0);
-//    milliPrescaler = MAIN_TICKS_PER_MILLI;
-//    (void) milliPrescaler;
-// @formatter:off
-__asm
-    clrw     y
-    ldw     x,#_milliTimer
-    ldw     (TIMER_TICK,x),y
-    call      __InitQNodeInX
-
-__endasm;
-// @formatter:on
-#ifdef OPT_SEC_TIMER
-    _InitTimer(&secTimer, 0);
-    secPrescaler = 1000;
-    (void) secPrescaler;
-#endif
-#endif
-
-#ifdef OPT_PREEMPT
-    taskSliceTicks = TASK_SLICE_TICKS * MAIN_TICKS_PER_MILLI; // decrement every milliTick, on zero do secTick
-#endif
-}
-
-/*
- * Handles timer tick, decrementing and if 0 scheduling tasks
- */
-typedef void (*QFunc)(QNode *, QNode *);
-
 /*
  * Do timer tick for timer X, queing function in Y
  *
@@ -305,7 +280,7 @@ __asm
 
 dotimer.do:
     ldw     x,(QNEXT,x) ; task = task->next;
-    cpw     x,(2,sp)
+    cpw     x,(1,sp)  ; timer
     jreq    dotimer.while ; task == timer
 
     ldw     y,x
@@ -406,7 +381,7 @@ __asm
 
 tick.preempt:
     ; pre-empt the current task
-    jp      __YieldToTail
+    jp      __IsrYieldToTail
 __endasm;
 #else
 __asm
@@ -424,8 +399,9 @@ void WaitTicksAdj(uint16_t ticks)__naked
     (void) ticks;
 // @formatter:off
 __asm
-    ldw     y,(3,sp)  ; get passed parameter ticks
-    ldw     x,#_currentTask
+    sim
+    ldw     y,(3,sp)  ; get passed parameter ticks sp: pch, pcl, ev.h, ev.l
+    ldw     x,_currentTask
     ldw     x,(TIMER_TICK,x)
     subw    x,_tickTime
     ; see if rolled over
@@ -437,10 +413,10 @@ __asm
 waitadj.notrolled:
     ; need to subtract it from y and if y is less then make it 0
     ld     a,yl
-    sub    a,(2,sp)
+    sub    a,(4,sp)  ; ticks.l
     ld     yl,a
     ld     a,yh
-    sbc    a,(1,sp)
+    sbc    a,(3,sp)
     ld     yh,a
     jrnc   waitadj.done ; no carry, was big enough
 
@@ -454,53 +430,35 @@ __endasm;
 // @formatter:on
 }
 #endif
+
 void WaitTicks(uint16_t ticks)__naked
 {
     (void) ticks;
 // @formatter:off
 __asm
-    popw    x ; get return address
-    callf   waitticks.far
-waitticks.far:
-    ; here the stack looks like the following was done: push pcl, push pch, push pce
-    ldw    (1,sp),x ; overwrite return with callers address
-
-    ; simulate an interrupt stack
-    pushw y
-    pushw x
-    push a
-    push cc
-    rim
-    ldw     y,(10,sp)  ; get passed parameter ticks
     ldw     x,#_mainTimer
 
-    ; fallthrough to next function, assume function order is fixed by source
-    ;jra     __WaitCommon
-__endasm;
-// @formatter:on
-}
-
-void _WaitCommon()__naked
-{
-// @formatter:off
-    // all registers pushed on stack ready for _YieldXtoY call
-    // X is timer
-    // Y is ticks
-__asm
+; X - timer
+; Y - ticks
+waitcommon:
+    sim
+    ldw     __taskQueue,x  ; save timer
+    ldw     __queueFunction,y ; save ticks
+    ldw     y,(3,sp)  ; get passed parameter ticks, sp: pch, pcl, ev.h, ev.l
     tnzw    y
     jrne    wait.1
 
     ; already 0, yield
-    jp     __YieldToTail
+    jp     _Yield
 
 wait.1:
-    pushw   x
+    ldw     y,__queueFunction
     ldw     x,_currentTask
     ldw     (TIMER_TICK,x),y    ; set timer ticks
-
-    popw    x ; x is timer
+    ldw     x,__taskQueue ; x is timer
     ldw     y,#__AddTaskYtoTimerX
-    jp      __IsrYieldToXatY
+    jp      __YieldToXatYStack
+
 __endasm;
 // @formatter:on
 }
@@ -511,21 +469,8 @@ void WaitMillis(uint16_t ticks)__naked
     (void) ticks;
 // @formatter:off
 __asm
-    popw    x ; get return address
-    callf   waitmilli.far
-waitmilli.far:
-    ; here the stack looks like the following was done: push pcl, push pch, push pce, so memory relative to SP is 1:PCE, 2:PCH, 3:PCL
-    ldw    (2,sp),x ; overwrite return with callers address
-
-    ; simulate an interrupt stack
-    pushw y
-    pushw x
-    push a
-    push cc
-    rim
-    ldw     y,(10,sp)  ; get passed parameter ticks (just like this was a far call)
     ldw     x,#_milliTimer
-    jra     __WaitCommon
+    jra     waitcommon
 __endasm;
 // @formatter:on
 }
@@ -536,21 +481,8 @@ void WaitSecs(uint16_t ticks)__naked
     (void) ticks;
 // @formatter:off
 __asm
-    popw    x ; get return address
-    callf   waitsec.far
-waitsec.far:
-    ; here the stack looks like the following was done: push pcl, push pch, push pce, so memory relative to SP is 1:PCE, 2:PCH, 3:PCL
-    ldw    (2,sp),x ; overwrite return with callers address
-
-    ; simulate an interrupt stack
-    pushw y
-    pushw x
-    push a
-    push cc
-    rim
-    ldw     y,(10,sp)  ; get passed parameter ticks (just like this was a far call)
     ldw     x,#_secTimer
-    jra     __WaitCommon
+    jra     waitcommon
 __endasm;
 // @formatter:on
 }
@@ -558,4 +490,3 @@ __endasm;
 #endif
 
 #endif
-

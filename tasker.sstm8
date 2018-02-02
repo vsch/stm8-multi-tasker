@@ -1,0 +1,144 @@
+# multi-tasker global functions as variables so we can manipulate stuff easier
+var clock rom 0x00008030
+var timerISR rom 0x00008049
+var eventISR rom 0x0000804E
+var syncedToISR rom 0x00008062
+var ledBlink rom 0x0000806D
+var main rom 0x00008088
+var SaveGlobalState rom 0x000080AF
+var RestoreGlobalState rom 0x000080BF
+var queueDescription rom 0x000080CF
+var taskDescription rom 0x000080D1
+var semaDescription rom 0x000080E1
+var eventDescription rom 0x000080E4
+var mutexDescription rom 0x000080E7
+var descriptions rom 0x000080E9
+var InitMultiTasker rom 0x000080FD
+var _initDescriptionSize rom 0x00008174
+var QInitNode rom 0x00008176
+var _InitQNodeInX rom 0x00008178
+var _QNodeUnlinkInX rom 0x0000817F
+var QNodeUnlink rom 0x000081A0
+var QNodeIsEmpty rom 0x000081A8
+var _QNodeLinkPrevInXY rom 0x000081B6
+var QNodeLinkPrev rom 0x000081CB
+var QNodeLinkTail rom 0x000081CB
+var _QNodeLinkNextInXY rom 0x000081D5
+var QNodeLinkHead rom 0x000081EB
+var QNodeLinkNext rom 0x000081EB
+var queueDescriptionSize rom 0x000081F7
+var _InitTaskDescInX rom 0x000081F9
+var _IsrYieldToTail rom 0x0000823F
+var Yield rom 0x00008249
+var _YieldToXatYStack rom 0x00008251
+var _IsrYieldToXatY rom 0x00008269
+var taskDescriptionSize rom 0x000082B1
+var InitTimers rom 0x000082B3
+var _AddTaskYtoTimerX rom 0x000082D9
+var _DoTimerTickInXY rom 0x0000835C
+var _TickTimerIsr rom 0x0000838E
+var WaitTicksAdj rom 0x000083D8
+var WaitTicks rom 0x000083FA
+var WaitMillis rom 0x00008421
+var WaitSecs rom 0x00008426
+var timerSize rom 0x0000842B
+var _InitSemaInXA rom 0x0000842D
+var AcquireSema rom 0x00008432
+var ReleaseSema rom 0x00008445
+var semaDescriptionSize rom 0x00008462
+var InitEvent rom 0x00008464
+var WaitEvent rom 0x00008467
+var SignalEvent rom 0x00008471
+var SignalPriorityEvent rom 0x00008498
+var eventDescriptionSize rom 0x0000849E
+var _InitMutexInX rom 0x000084A0
+var LockMutex rom 0x000084A7
+var UnlockMutex rom 0x000084CC
+var mutex_description_size rom 0x000084F8
+var _dummy rom 0x000084FA
+
+# multi-tasker global data vars
+
+var mutex rom 0x00000001
+var timer rom 0x00000008
+var sema rom 0x0000000C
+var isrEvent rom 0x00000011
+var syncedToISR_SP rom 0x00000015
+var syncToISR_Task rom 0x00000055
+var ledBlink_SP rom 0x0000005D
+var ledBlink_Task rom 0x0000009D
+var globalVar1 rom 0x000000A5
+var globalVar2 rom 0x000000A6
+var _globalStateReturn rom 0x000000A8
+var _initFunc rom 0x000000AA
+var _initSize rom 0x000000AC
+var readyTasks rom 0x000000AE
+var _queueFunction rom 0x000000B2
+var _taskQueue rom 0x000000B4
+var mainTimer rom 0x000000B6
+var tickTime rom 0x000000BC
+var milliTimer rom 0x000000BE
+var milliPrescaler rom 0x000000C4
+var secPrescaler rom 0x000000C6
+var secTimer rom 0x000000C8
+var taskSliceTicks rom 0x000000CE
+var dummy rom 0x000000D0
+
+# break on all functions
+break clock
+break timerISR
+break eventISR
+break syncedToISR
+break ledBlink
+break main
+break SaveGlobalState
+break RestoreGlobalState
+# break queueDescription
+# break taskDescription
+# break semaDescription
+# break eventDescription
+# break mutexDescription
+# break descriptions
+# break InitMultiTasker
+# break _initDescriptionSize
+# break QInitNode
+# break _InitQNodeInX
+# break _QNodeUnlinkInX
+# break QNodeUnlink
+break QNodeIsEmpty
+break _QNodeLinkPrevInXY
+break QNodeLinkPrev
+break QNodeLinkTail
+# break _QNodeLinkNextInXY
+# break QNodeLinkHead
+# break QNodeLinkNext
+# break queueDescriptionSize
+# break _InitTaskDescInX
+break _IsrYieldToTail
+# break Yield
+break _YieldToXatYStack
+break _IsrYieldToXatY
+# break taskDescriptionSize
+# break InitTimers
+break _AddTaskYtoTimerX
+break _DoTimerTickInXY
+break _TickTimerIsr
+break WaitTicksAdj
+break WaitTicks
+break WaitMillis
+break WaitSecs
+# break _InitSemaInXA
+break AcquireSema
+break ReleaseSema
+# break semaDescriptionSize
+# break InitEvent
+break WaitEvent
+break SignalEvent
+break SignalPriorityEvent
+# break eventDescriptionSize
+# break _InitMutexInX
+break LockMutex
+break UnlockMutex
+# break mutexDescriptionSize
+# break _dummy
+

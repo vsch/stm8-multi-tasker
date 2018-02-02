@@ -2,18 +2,20 @@
 // Created by Vladimir Schneider on 2018-01-28.
 //
 
-#include "semaphores.h"
+#include "multitasker.h"
 
-void InitSema(Sema *sema, uint8_t initialCount)__naked
+const uint16_t semaDescriptionSize = sizeof(SemaDescription);
+
+/*
+ * X - Sema *sema,
+ * A - uint8_t initialCount
+*/
+void _InitSemaInXA()__naked
 {
-    (void)sema;
-    (void)initialCount;
 //    sema->count = initialCount;
-//    InitQNode((QNode *) sema);
+//    QInitNode((QNode *) sema);
 // @formatter:off
 __asm
-    ld      a,(3,sp) ; initialCount
-    ldw     x,(4,sp) ; sema
     ld      (SEMA_COUNT,x),a
     jp      __InitQNodeInX
 __endasm;
@@ -24,35 +26,20 @@ void AcquireSema(Sema *sema)__naked {
     (void) sema;
 // @formatter:off
 __asm
-    push cc
-    rim
-    ldw     x,(4,sp)  ; get sema
+    sim
+    ldw     x,(3,sp)  ; get sema sp: pc.h, pc.l, n.h, n.l
 
     ld      a,(SEMA_COUNT,x)
     jrne    acquire.done
 
-    pop     cc
-    popw    y ; get return address
-    callf   acquire.far
-acquire.far:
-    ; here the stack looks like the following was done: push pcl, push pch, push pce
-    ldw    (1,sp),y ; overwrite return with callers address
-
-    ; simulate an interrupt stack
-    pushw y
-    pushw x
-    push a
-    push cc
-    rim
-
     ; put this one in the queue
     ldw     y,#__QNodeLinkTailInXY
-    jp      __IsrYieldToXatY
+    jp      __YieldToXatYStack
 
 acquire.done:
     dec     a
     ld      (SEMA_COUNT,x),a
-    pop     cc
+    rim
     ret
 
 __endasm;
@@ -64,8 +51,8 @@ void ReleaseSema(Sema *sema)__naked {
 // @formatter:off
 __asm
     push cc
-    rim
-    ldw     y,(4,sp)  ; get sema
+    sim
+    ldw     y,(3,sp)  ; get sema sp: pc.h, pc.l, n.h, n.l
 
     ; if there is a process waiting we will move it to ready and not adjust count
     ldw     x,y

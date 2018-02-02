@@ -2,7 +2,6 @@
 // Created by Vladimir Schneider on 2018-01-28.
 //
 #include "stdint.h"
-#include "options.h"
 
 #ifndef MULTI_TASKER_QUEUES_H
 
@@ -13,11 +12,11 @@ struct QNode
     union
     {
         QNode *prev;
-        QNode *head;
+        QNode *next;
     };
     union
     {
-        QNode *next;
+        QNode *head;
         QNode *tail;
     };
 };
@@ -32,7 +31,9 @@ struct QNode
 #define __QNodeLinkTailInXY __QNodeLinkPrevInXY
 #define __QNodeLinkHeadInXY __QNodeLinkNextInXY
 
-extern void InitQNode(QNode *node);  // sets the two pointers to node
+#pragma callee_saves QInitNodes, QNodeUnlink, QNodeIsEmpty, QNodeLinkPrev, QNodeLinkTail, QNodeLinkNext, QNodeLinkHead
+
+extern void QInitNode(QNode *node);  // initialize node
 extern void QNodeUnlink(QNode *node);  // unlink node, if has prev then node.prev->next = node.next, if has next then node.next->prev = node.prev
 extern uint8_t QNodeIsEmpty(QNode *node);  // return 0 if empty
 extern void QNodeLinkPrev(QNode *node, QNode *other);  // link Y before X
